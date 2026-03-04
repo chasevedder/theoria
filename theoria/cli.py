@@ -17,7 +17,7 @@ def main():
     parser.add_argument("-v", "--video", required=True, type=str, help="Path to the source video file")
 
     # Optional
-    parser.add_argument("-o", "--output", type=str, help="Path for the output subtitle file")
+    parser.add_argument("-o", "--output", type=str, help="Output directory for subtitle files (default: current directory)")
     parser.add_argument("--lang", type=str, default="ko", help="Source language code (default: 'ko')")
     parser.add_argument("--batch-size", type=int, help="Number of segments per Gemini API call")
     parser.add_argument("--max-workers", type=int, help="Level of parallelization for API calls")
@@ -65,13 +65,8 @@ def main():
     audio_file = run_dir / f"{video_file.stem}_audio.wav"
 
     formats = list(dict.fromkeys(args.format))
-    if len(formats) == 1 and args.output:
-        output_paths = {formats[0]: Path(args.output)}
-    else:
-        if args.output and len(formats) > 1:
-            print("Note: --output ignored when multiple formats are specified; paths are auto-derived.")
-        base = Path(video_file.stem)
-        output_paths = {fmt: base.with_suffix(f".{fmt}") for fmt in formats}
+    output_dir = Path(args.output) if args.output else Path(".")
+    output_paths = {fmt: output_dir / f"{video_file.stem}.{fmt}" for fmt in formats}
 
     print("--- Pipeline Initialization ---")
     print(f"Source Video: {video_file.name}")

@@ -49,7 +49,7 @@ uv run theoria -v episode.mkv --limit-segments 50 --no-cleanup
 | Flag | Description | Default |
 |---|---|---|
 | `-v, --video` | Path to source video (required) | — |
-| `-o, --output` | Output file path (single format only) | auto-derived |
+| `-o, --output` | Output directory for subtitle files | current directory |
 | `--format` | Output format(s): `srt`, `ass`, or both | `srt` |
 | `--lang` | Source language code | `ko` |
 | `--preset` | Translation preset (currently: `variety`) | `variety` |
