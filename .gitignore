@@ -13,7 +13,5 @@ wheels/
 # Project outputs and caches
 output/
 models/
-*.bak*
-
-# Screenshots
-/*.jpg
+.coverage
+.pytest_cache/

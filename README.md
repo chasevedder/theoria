@@ -1,4 +1,6 @@
 # theoria
+> [!NOTE]
+> This project was built almost entirely with AI-assisted code generation using [Claude Code](https://claude.com/claude-code).
 
 Multimodal AI subtitle generator. Takes a foreign-language video and produces translated subtitles by combining speech recognition (Whisper), speaker diarization (Pyannote), video frame analysis, and LLM translation (Gemini).
 
@@ -82,7 +84,7 @@ See [`theoria.toml.example`](theoria.toml.example) for all available options.
 
 ### Presets
 
-Presets control the translation prompt intro and genre-specific rules. Currently only **variety** is built-in (Korean variety shows — filters duplicate captions that repeat spoken dialogue).
+Presets control the translation prompt intro and genre-specific rules. Currently only **variety** is built-in (Korean variety shows).
 
 For other genres or languages, set `custom_prompt` in `theoria.toml` to fully replace the intro and genre rules while keeping the core structural rules (speaker ID, JSON schema, etc.) intact.
 
@@ -90,7 +92,7 @@ For other genres or languages, set `custom_prompt` in `theoria.toml` to fully re
 
 **SRT** — Standard subtitle format. Dialogue and high-importance on-screen captions are written as separate timed entries.
 
-**ASS** — Advanced SubStation Alpha. Dialogue uses a Default style at the bottom. On-screen captions are positioned at their detected screen location using the Caption style, with automatic stacking to prevent overlap.
+**ASS** — Advanced SubStation Alpha. Dialogue uses a Default style at the bottom. On-screen captions are positioned at their detected screen location using the Caption style, with automatic stacking to prevent overlap. **Note:** ASS output is experimental — caption positioning relies on Gemini's location estimates, which can be inconsistent, which can lead to captions overlapping or not aligning well with their on-screen source.
 
 ## Project Structure
 
