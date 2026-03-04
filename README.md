@@ -26,6 +26,7 @@ The pipeline:
 git clone https://github.com/yourusername/theoria.git
 cd theoria
 uv sync
+source .venv/bin/activate
 ```
 
 ## Usage
