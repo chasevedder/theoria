@@ -46,6 +46,10 @@ def export_srt(translated_data: list[dict], output_path: str = "output/test_subs
             if isinstance(cap, dict) and cap.get("importance") == "high" and cap.get("text", "").strip():
                 captions.append(cap["text"])
 
+        # Write dialogue first so captions (added after) render on top
+        if line.get("english_text", "").strip():
+            entries.append((seg_start, seg_end, line["english_text"]))
+
         # Write captions as separate entries with midpoint-centered timing
         if captions:
             mid = (seg_start + seg_end) / 2
@@ -58,10 +62,6 @@ def export_srt(translated_data: list[dict], output_path: str = "output/test_subs
                 c_start = cap_window_start + j * slice_len
                 c_end = cap_window_start + (j + 1) * slice_len
                 entries.append((c_start, c_end, f"[{text}]"))
-
-        # Write dialogue as its own entry
-        if line.get("english_text", "").strip():
-            entries.append((seg_start, seg_end, line["english_text"]))
 
     with open(output_path, "w", encoding="utf-8") as f:
         for i, (start, end, text) in enumerate(entries, start=1):
