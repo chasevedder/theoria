@@ -29,9 +29,7 @@ def validate_segments(segments: list[dict]) -> tuple[list[dict], int]:
             skipped += 1
             continue
 
-        # Warn if english_text is missing but text exists
         if "english_text" not in seg and "text" in seg:
-            print(f"  Warning: segment at {seg['start']:.2f}s missing english_text, falling back to original text")
             seg["english_text"] = seg.get("text", "")
 
         # Filter malformed on_screen_captions
