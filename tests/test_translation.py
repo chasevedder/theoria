@@ -1,6 +1,8 @@
-"""Tests for validate_segments and parse_response."""
+"""Tests for validate_segments, parse_response, and translate_with_gemini."""
 
 import json
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from theoria.translation import validate_segments, parse_response
 
@@ -110,3 +112,72 @@ class TestParseResponse:
         result = parse_response(text)
         assert len(result) == 1
         assert result[0]["english_text"] == "Good"
+
+
+class TestTranslateWithGeminiFramesDir:
+    """Verify frames_dir path construction for the frame_hash parameter."""
+
+    _GOOGLE_MOCKS = {
+        "google": MagicMock(),
+        "google.genai": MagicMock(),
+        "google.genai.types": MagicMock(),
+    }
+
+    def _make_mock_client(self, response_data):
+        segments_json = json.dumps(response_data)
+        mock_response = MagicMock()
+        mock_response.text = segments_json
+        mock_response.usage_metadata = MagicMock()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+        return mock_client
+
+    def test_frames_dir_uses_frame_hash_when_provided(self, tmp_path):
+        """translate_with_gemini reads frames from frames_{id}_{hash}/ when frame_hash set."""
+        import sys
+        from theoria.translation import translate_with_gemini
+        from theoria.config import TheoriaConfig
+
+        chunk = [{"start": 0.0, "end": 2.0, "speaker": "A", "text": "hi"}]
+        response = [{"start": 0.0, "end": 2.0, "speaker": "A", "english_text": "hi"}]
+        client = self._make_mock_client(response)
+
+        frames_dir = tmp_path / "frames_0_abc12345"
+        frames_dir.mkdir()
+        (frames_dir / "chunk_0.jpg").write_bytes(b"")
+
+        with patch.dict(sys.modules, self._GOOGLE_MOCKS):
+            with patch("theoria.translation.Image.open", return_value=MagicMock()):
+                result, _ = translate_with_gemini(
+                    client, "video.mkv", chunk,
+                    chunk_id=0, run_dir=tmp_path,
+                    frame_hash="abc12345",
+                    config=TheoriaConfig(),
+                )
+
+        assert result is not None
+
+    def test_frames_dir_fallback_without_frame_hash(self, tmp_path):
+        """translate_with_gemini falls back to frames_{id}/ when frame_hash is empty."""
+        import sys
+        from theoria.translation import translate_with_gemini
+        from theoria.config import TheoriaConfig
+
+        chunk = [{"start": 0.0, "end": 2.0, "speaker": "A", "text": "hi"}]
+        response = [{"start": 0.0, "end": 2.0, "speaker": "A", "english_text": "hi"}]
+        client = self._make_mock_client(response)
+
+        frames_dir = tmp_path / "frames_0"
+        frames_dir.mkdir()
+        (frames_dir / "chunk_0.jpg").write_bytes(b"")
+
+        with patch.dict(sys.modules, self._GOOGLE_MOCKS):
+            with patch("theoria.translation.Image.open", return_value=MagicMock()):
+                result, _ = translate_with_gemini(
+                    client, "video.mkv", chunk,
+                    chunk_id=0, run_dir=tmp_path,
+                    frame_hash="",
+                    config=TheoriaConfig(),
+                )
+
+        assert result is not None
