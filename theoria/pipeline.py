@@ -30,6 +30,7 @@ from rich.progress import (
 
 from theoria.alignment import align_data
 from theoria.exporters import export_ass, export_srt
+from theoria.hashing import _hash
 from theoria.translation import translate_with_gemini
 
 if TYPE_CHECKING:
@@ -124,6 +125,21 @@ def run_pipeline(
         overall_task = overall_progress.add_task("Total Pipeline", total=5)
         base_run_dir = run_dir if run_dir else Path("output")
 
+        _audio_size = Path(audio_file).stat().st_size
+        _vstat = Path(video_file).stat()
+
+        diar_hash    = _hash(_audio_size)
+        whisper_hash = _hash(diar_hash, lang, config.whisper_model)
+        align_hash   = _hash(diar_hash, whisper_hash, config.max_duration, config.min_gap)
+        frame_hash   = _hash(align_hash, _vstat.st_mtime, _vstat.st_size, sample_rate, detect_scenes)
+        trans_hash   = _hash(
+            frame_hash,
+            config.gemini_model, config.temperature,
+            config.preset, config.custom_prompt or "",
+            config.batch_size, sequential, config.context_window_size,
+            limit_segments or 0,
+        )
+
         def run_with_refresh(func, *args, **kwargs):
             with ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(func, *args, **kwargs)
@@ -134,7 +150,7 @@ def run_pipeline(
 
         # Step A: Run Diarization
         diar_task = step_progress.add_task("Speaker Diarization", total=None)
-        rttm_path = base_run_dir / "diarization.rttm"
+        rttm_path = base_run_dir / f"diarization_{diar_hash[:8]}.rttm"
 
         if rttm_path.exists():
             try:
@@ -157,7 +173,7 @@ def run_pipeline(
 
         # Step B: Run Whisper
         whisper_task = step_progress.add_task("Whisper Transcription", total=None)
-        whisper_cache_path = base_run_dir / "whisper_segments.pkl"
+        whisper_cache_path = base_run_dir / f"whisper_{whisper_hash[:8]}.pkl"
 
         if whisper_cache_path.exists():
             try:
@@ -194,7 +210,7 @@ def run_pipeline(
 
         # Step C: Align the Data
         align_task = step_progress.add_task("Aligning Timestamps", total=None)
-        segments_json_path = base_run_dir / "segments.json"
+        segments_json_path = base_run_dir / f"segments_{align_hash[:8]}.json"
 
         if segments_json_path.exists():
             with open(segments_json_path, "r", encoding="utf-8") as f:
@@ -219,8 +235,7 @@ def run_pipeline(
         extract_task = step_progress.add_task("Extracting Frames", total=total_batches)
 
         def extract_chunk_frames(idx, chunk, sample_rate=0):
-            rate_tag = f"_s{sample_rate}" if sample_rate > 0 else ""
-            frames_dir = Path(base_run_dir).resolve() / f"frames_{idx}{rate_tag}"
+            frames_dir = Path(base_run_dir).resolve() / f"frames_{idx}_{frame_hash[:8]}"
 
             earliest_start = min(segment["start"] for segment in chunk)
             latest_end = max(segment["end"] for segment in chunk)
@@ -292,75 +307,95 @@ def run_pipeline(
         overall_progress.update(overall_task, advance=1)
 
         # Step E: Translate with Gemini
+        trans_cache_path = base_run_dir / f"translated_{trans_hash[:8]}.json"
         translate_task = step_progress.add_task("Gemini Translation", total=total_batches)
         results_map = {}
         failed_chunks = []
         total_input_tokens = 0
         total_output_tokens = 0
+        translation_cached = False
 
-        def process_chunk(idx, chunk, context=None):
-            include_captions = "ass" in output_paths or "srt" in output_paths
-            for attempt in range(config.max_retries):
-                try:
-                    translated_chunk, usage = translate_with_gemini(
-                        gemini_client, video_file, chunk, chunk_id=idx,
-                        context=context, run_dir=base_run_dir,
-                        include_captions=include_captions, sample_rate=sample_rate,
-                        config=config,
-                    )
-                    if translated_chunk:
-                        return idx, translated_chunk, usage
-                except Exception as e:
-                    print(f"  [Chunk {idx}] Attempt {attempt + 1} failed: {e}")
-                if attempt < config.max_retries - 1:
-                    time.sleep(config.retry_sleep)
-            return idx, None, None
+        if trans_cache_path.exists():
+            try:
+                with open(trans_cache_path, "r", encoding="utf-8") as f:
+                    all_translated_data = json.load(f)
+                translation_cached = True
+                step_progress.update(translate_task, completed=total_batches, total=total_batches,
+                                     description="Translation Loaded from Cache")
+                overall_progress.update(overall_task, advance=1)
+            except Exception as e:
+                print(f"  Warning: corrupt translation cache ({e}), re-running...")
+                trans_cache_path.unlink(missing_ok=True)
 
-        if sequential:
-            current_context = ""
-            for i, chunk in enumerate(chunks):
-                idx, res, usage = process_chunk(i, chunk, context=current_context)
-                if res:
-                    results_map[idx] = res
-                    if usage:
-                        total_input_tokens += usage.prompt_token_count or 0
-                        total_output_tokens += usage.candidates_token_count or 0
-                    summary_data = [{"speaker": d.get("speaker"), "english_text": d.get("english_text")} for d in res[-config.context_window_size:]]
-                    current_context = json.dumps(summary_data, ensure_ascii=False)
-                else:
-                    failed_chunks.append(idx)
-                step_progress.update(translate_task, advance=1)
-        else:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(process_chunk, i, chunk): i for i, chunk in enumerate(chunks)}
-                while futures:
-                    done, not_done = wait(futures.keys(), timeout=0.1, return_when=FIRST_COMPLETED)
-                    for future in done:
-                        idx, res, usage = future.result()
-                        if res:
-                            results_map[idx] = res
-                            if usage:
-                                total_input_tokens += usage.prompt_token_count or 0
-                                total_output_tokens += usage.candidates_token_count or 0
-                        else:
-                            failed_chunks.append(idx)
-                        step_progress.update(translate_task, advance=1)
-                        del futures[future]
-        step_progress.update(translate_task, description="Translation Complete")
-        overall_progress.update(overall_task, advance=1)
+        if not translation_cached:
+            def process_chunk(idx, chunk, context=None):
+                include_captions = "ass" in output_paths or "srt" in output_paths
+                for attempt in range(config.max_retries):
+                    try:
+                        translated_chunk, usage = translate_with_gemini(
+                            gemini_client, video_file, chunk, chunk_id=idx,
+                            context=context, run_dir=base_run_dir,
+                            include_captions=include_captions, sample_rate=sample_rate,
+                            frame_hash=frame_hash[:8],
+                            config=config,
+                        )
+                        if translated_chunk:
+                            return idx, translated_chunk, usage
+                    except Exception as e:
+                        print(f"  [Chunk {idx}] Attempt {attempt + 1} failed: {e}")
+                    if attempt < config.max_retries - 1:
+                        time.sleep(config.retry_sleep)
+                return idx, None, None
 
-    if failed_chunks:
-        failed_str = ", ".join(str(i) for i in sorted(failed_chunks))
-        print(f"\nWarning: chunks {failed_str} failed translation — output has gaps")
+            if sequential:
+                current_context = ""
+                for i, chunk in enumerate(chunks):
+                    idx, res, usage = process_chunk(i, chunk, context=current_context)
+                    if res:
+                        results_map[idx] = res
+                        if usage:
+                            total_input_tokens += usage.prompt_token_count or 0
+                            total_output_tokens += usage.candidates_token_count or 0
+                        summary_data = [{"speaker": d.get("speaker"), "english_text": d.get("english_text")} for d in res[-config.context_window_size:]]
+                        current_context = json.dumps(summary_data, ensure_ascii=False)
+                    else:
+                        failed_chunks.append(idx)
+                    step_progress.update(translate_task, advance=1)
+            else:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {executor.submit(process_chunk, i, chunk): i for i, chunk in enumerate(chunks)}
+                    while futures:
+                        done, not_done = wait(futures.keys(), timeout=0.1, return_when=FIRST_COMPLETED)
+                        for future in done:
+                            idx, res, usage = future.result()
+                            if res:
+                                results_map[idx] = res
+                                if usage:
+                                    total_input_tokens += usage.prompt_token_count or 0
+                                    total_output_tokens += usage.candidates_token_count or 0
+                            else:
+                                failed_chunks.append(idx)
+                            step_progress.update(translate_task, advance=1)
+                            del futures[future]
+            step_progress.update(translate_task, description="Translation Complete")
+            overall_progress.update(overall_task, advance=1)
 
-    all_translated_data = []
-    for i in range(len(chunks)):
-        if i in results_map:
-            all_translated_data.extend(results_map[i])
+    if not translation_cached:
+        if failed_chunks:
+            failed_str = ", ".join(str(i) for i in sorted(failed_chunks))
+            print(f"\nWarning: chunks {failed_str} failed translation — output has gaps")
 
-    translated_json_path = base_run_dir / "translated_results.json"
-    with open(translated_json_path, "w", encoding="utf-8") as f:
-        json.dump(all_translated_data, f, ensure_ascii=False, indent=2)
+        all_translated_data = []
+        for i in range(len(chunks)):
+            if i in results_map:
+                all_translated_data.extend(results_map[i])
+
+        all_chunks_succeeded = len(results_map) == len(chunks)
+        if all_chunks_succeeded and all_translated_data:
+            with open(trans_cache_path, "w", encoding="utf-8") as f:
+                json.dump(all_translated_data, f, ensure_ascii=False, indent=2)
+    else:
+        all_chunks_succeeded = True
 
     if all_translated_data:
         if "srt" in output_paths:
@@ -377,27 +412,27 @@ def run_pipeline(
         if "ass" in output_paths:
             export_ass(all_translated_data, output_paths["ass"], config=config)
 
-        all_chunks_succeeded = len(results_map) == len(chunks)
         if not no_cleanup and base_run_dir.exists() and all_chunks_succeeded:
             print(f"Cleaning up temporary files in {base_run_dir}...")
             shutil.rmtree(base_run_dir)
     else:
         print("Translation failed. No output generated.")
 
-    print(f"\nTotal tokens: {total_input_tokens} input, {total_output_tokens} output")
+    if not translation_cached:
+        print(f"\nTotal tokens: {total_input_tokens} input, {total_output_tokens} output")
 
-    from theoria.config import DEFAULT_GEMINI_MODEL
-    using_default_model = config.gemini_model == DEFAULT_GEMINI_MODEL
-    if using_default_model or config._costs_from_config:
-        input_cost = (total_input_tokens / 1_000_000) * config.input_cost_per_million
-        output_cost = (total_output_tokens / 1_000_000) * config.output_cost_per_million
-        total_cost = input_cost + output_cost
-        pricing_source = DEFAULT_GEMINI_MODEL if using_default_model else config.gemini_model
-        print(f"Estimated cost: ${total_cost:.4f} (based on {pricing_source} pricing)")
-    else:
-        print(
-            f"Cost estimate unavailable — model '{config.gemini_model}' differs from default. "
-            "Set input_cost_per_million/output_cost_per_million in theoria.toml to enable."
-        )
+        from theoria.config import DEFAULT_GEMINI_MODEL
+        using_default_model = config.gemini_model == DEFAULT_GEMINI_MODEL
+        if using_default_model or config._costs_from_config:
+            input_cost = (total_input_tokens / 1_000_000) * config.input_cost_per_million
+            output_cost = (total_output_tokens / 1_000_000) * config.output_cost_per_million
+            total_cost = input_cost + output_cost
+            pricing_source = DEFAULT_GEMINI_MODEL if using_default_model else config.gemini_model
+            print(f"Estimated cost: ${total_cost:.4f} (based on {pricing_source} pricing)")
+        else:
+            print(
+                f"Cost estimate unavailable — model '{config.gemini_model}' differs from default. "
+                "Set input_cost_per_million/output_cost_per_million in theoria.toml to enable."
+            )
 
     print(f"Total processing time: {time.time() - start_time:.2f} seconds")

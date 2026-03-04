@@ -54,6 +54,7 @@ def translate_with_gemini(
     run_dir=None,
     include_captions: bool = False,
     sample_rate: float = 0,
+    frame_hash: str = "",
     config: TheoriaConfig | None = None,
 ):
     """Send frames + transcript to Gemini for translation.
@@ -68,7 +69,7 @@ def translate_with_gemini(
     temperature = config.temperature if config else 1.0
 
     base_dir = Path(run_dir).resolve() if run_dir else Path("output").resolve()
-    frames_dir = base_dir / f"frames_{chunk_id}"
+    frames_dir = base_dir / (f"frames_{chunk_id}_{frame_hash}" if frame_hash else f"frames_{chunk_id}")
 
     # Build rules without inline numbers so insertion order always produces correct numbering
     rules = [
