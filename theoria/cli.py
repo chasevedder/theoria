@@ -36,6 +36,9 @@ def main():
 
     args = parser.parse_args()
 
+    if args.sample_rate > 0 and args.detect_scenes:
+        parser.error("--sample-rate and --detect-scenes are mutually exclusive")
+
     # Load config: defaults -> TOML -> CLI overrides
     config = load_config(args.config)
 
