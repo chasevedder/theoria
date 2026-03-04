@@ -383,10 +383,20 @@ def run_pipeline(
     else:
         print("Translation failed. No output generated.")
 
-    input_cost = (total_input_tokens / 1_000_000) * config.input_cost_per_million
-    output_cost = (total_output_tokens / 1_000_000) * config.output_cost_per_million
-    total_cost = input_cost + output_cost
-
     print(f"\nTotal tokens: {total_input_tokens} input, {total_output_tokens} output")
-    print(f"Estimated Gemini Cost: ${total_cost:.4f}")
+
+    from theoria.config import DEFAULT_GEMINI_MODEL
+    using_default_model = config.gemini_model == DEFAULT_GEMINI_MODEL
+    if using_default_model or config._costs_from_config:
+        input_cost = (total_input_tokens / 1_000_000) * config.input_cost_per_million
+        output_cost = (total_output_tokens / 1_000_000) * config.output_cost_per_million
+        total_cost = input_cost + output_cost
+        pricing_source = DEFAULT_GEMINI_MODEL if using_default_model else config.gemini_model
+        print(f"Estimated cost: ${total_cost:.4f} (based on {pricing_source} pricing)")
+    else:
+        print(
+            f"Cost estimate unavailable — model '{config.gemini_model}' differs from default. "
+            "Set input_cost_per_million/output_cost_per_million in theoria.toml to enable."
+        )
+
     print(f"Total processing time: {time.time() - start_time:.2f} seconds")

@@ -22,11 +22,14 @@ PRESETS: dict[str, dict[str, str]] = {
 }
 
 
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
+
+
 @dataclass
 class TheoriaConfig:
     # Models
     whisper_model: str = "large-v3"
-    gemini_model: str = "gemini-3-flash-preview"
+    gemini_model: str = DEFAULT_GEMINI_MODEL
 
     # Translation
     temperature: float = 1.0
@@ -55,6 +58,7 @@ class TheoriaConfig:
     # Cost (per 1M tokens)
     input_cost_per_million: float = 0.50
     output_cost_per_million: float = 3.00
+    _costs_from_config: bool = False
 
     # Prompt
     preset: str = "variety"
@@ -105,5 +109,8 @@ def load_config(config_path: str | None = None) -> TheoriaConfig:
     for key, value in toml_data.items():
         if key in valid_fields:
             setattr(config, key, value)
+
+    if "input_cost_per_million" in toml_data or "output_cost_per_million" in toml_data:
+        config._costs_from_config = True
 
     return config

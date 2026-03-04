@@ -70,7 +70,7 @@ def main():
     else:
         if args.output and len(formats) > 1:
             print("Note: --output ignored when multiple formats are specified; paths are auto-derived.")
-        base = video_file.with_suffix("")
+        base = Path(video_file.stem)
         output_paths = {fmt: base.with_suffix(f".{fmt}") for fmt in formats}
 
     print("--- Pipeline Initialization ---")
