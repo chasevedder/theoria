@@ -1,0 +1,36 @@
+[project]
+name = "theoria"
+version = "0.1.0"
+description = "Multimodal AI subtitle generator — Whisper + Pyannote + Gemini"
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "faster-whisper>=1.2.1",
+    "google-genai>=1.65.0",
+    "huggingface-hub<0.25.0",
+    "numpy<2.0.0",
+    "pillow>=12.1.1",
+    "pyannote-audio==3.1.1",
+    "rich>=14.3.3",
+    "torch==2.5.1",
+    "torchaudio==2.5.1",
+    "torchvision==0.20.1",
+    "tqdm>=4.67.3",
+]
+
+[project.scripts]
+theoria = "theoria.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }

@@ -1,0 +1,38 @@
+# theoria.toml — Configuration for the theoria subtitle generator
+# Place this file as theoria.toml in your working directory or ~/.config/theoria/
+
+# --- Models ---
+# whisper_model = "large-v3"
+# gemini_model = "gemini-3-flash-preview"
+
+# --- Translation ---
+# temperature = 1.0
+# max_retries = 3
+# retry_sleep = 10.0
+# context_window_size = 5     # Number of recent segments used as context in sequential mode
+# batch_size = 30              # Segments per Gemini API call
+# max_workers = 5              # Parallel API workers
+
+# --- Alignment ---
+# max_duration = 4.0           # Max chunk duration (seconds) before splitting
+# min_gap = 0.5                # Minimum silence gap (seconds) to fill with empty segment
+
+# --- Captions ---
+# max_cap_duration = 5.0       # Max caption display window (seconds)
+# line_height = 55             # Pixel offset between stacked captions in ASS
+
+# --- ASS Styles ---
+# play_res_x = 1920
+# play_res_y = 1080
+# dialogue_font = "Arial"
+# dialogue_fontsize = 60
+# caption_font = "Arial"
+# caption_fontsize = 45
+
+# --- Cost (per 1M tokens) ---
+# input_cost_per_million = 0.50
+# output_cost_per_million = 3.00
+
+# --- Prompt ---
+# preset = "variety"           # Only "variety" is built-in for now
+# custom_prompt = ""           # If set, overrides preset intro and genre rules entirely

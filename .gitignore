@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.aider*
+
+# Project outputs and caches
+output/
+models/
+*.bak*
+
+# Screenshots
+/*.jpg
