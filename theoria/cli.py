@@ -1,6 +1,7 @@
 """Command-line interface for theoria."""
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 
@@ -29,6 +30,7 @@ def main():
     parser.add_argument("--detect-scenes", action="store_true", help="Attempt to pick the best frame via scene detection")
     parser.add_argument("--sample-duration", type=int, help="Limit audio extraction to N seconds for testing")
     parser.add_argument("--limit-segments", type=int, help="Limit processing to the first N dialogue segments")
+    parser.add_argument("--clear-cache", action="store_true", help="Delete all cached data for this video before running")
 
     # Config
     parser.add_argument("--config", type=str, help="Path to theoria.toml config file")
@@ -62,8 +64,18 @@ def main():
     output_base = Path("output")
     output_base.mkdir(exist_ok=True)
 
-    run_dir = output_base / video_file.stem
+    _vs = video_file.stat()
+    _content_hash = hashlib.sha256(
+        f"{video_file.resolve()}|{_vs.st_mtime}|{_vs.st_size}".encode()
+    ).hexdigest()[:8]
+    run_dir = output_base / f"{video_file.stem}_{_content_hash}"
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.clear_cache and run_dir.exists():
+        import shutil as _shutil
+        print(f"Clearing cache: {run_dir}")
+        _shutil.rmtree(run_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
 
     audio_file = run_dir / f"{video_file.stem}_audio.wav"
 
