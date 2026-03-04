@@ -219,7 +219,8 @@ def run_pipeline(
         extract_task = step_progress.add_task("Extracting Frames", total=total_batches)
 
         def extract_chunk_frames(idx, chunk, sample_rate=0):
-            frames_dir = Path(base_run_dir).resolve() / f"frames_{idx}"
+            rate_tag = f"_s{sample_rate}" if sample_rate > 0 else ""
+            frames_dir = Path(base_run_dir).resolve() / f"frames_{idx}{rate_tag}"
 
             earliest_start = min(segment["start"] for segment in chunk)
             latest_end = max(segment["end"] for segment in chunk)
@@ -234,7 +235,7 @@ def run_pipeline(
 
             if frames_dir.exists():
                 existing_frames = [f for f in frames_dir.glob("*.jpg") if f.stat().st_size > 0]
-                if len(existing_frames) == expected_count:
+                if existing_frames:
                     return
 
             frames_dir.mkdir(parents=True, exist_ok=True)
