@@ -34,9 +34,23 @@ def export_srt(translated_data: list[dict], output_path: str = "output/test_subs
     multiple captions exist.
     """
     max_cap_duration = config.max_cap_duration if config else 5.0
+    min_cap_duration = config.min_cap_duration if config else 1.0
     entries = []
 
-    for line in translated_data:
+    # Pre-compute which dialogue segments need a speaker dash.
+    # A dash is added when two consecutive dialogue segments are from different
+    # speakers with a gap smaller than this threshold.
+    speaker_gap_threshold = 0.5
+    dialogue_indices = [i for i, line in enumerate(translated_data) if line.get("english_text", "").strip()]
+    needs_dash: set[int] = set()
+    for k in range(len(dialogue_indices) - 1):
+        a, b = dialogue_indices[k], dialogue_indices[k + 1]
+        gap = translated_data[b]["start"] - translated_data[a]["end"]
+        if gap < speaker_gap_threshold and translated_data[a].get("speaker") != translated_data[b].get("speaker"):
+            needs_dash.add(a)
+            needs_dash.add(b)
+
+    for i, line in enumerate(translated_data):
         seg_start = line["start"]
         seg_end = line["end"]
 
@@ -48,13 +62,18 @@ def export_srt(translated_data: list[dict], output_path: str = "output/test_subs
 
         # Write dialogue first so captions (added after) render on top
         if line.get("english_text", "").strip():
-            entries.append((seg_start, seg_end, line["english_text"]))
+            text = line["english_text"]
+            if i in needs_dash:
+                text = f"- {text}"
+            entries.append((seg_start, seg_end, text))
 
         # Write captions as separate entries with midpoint-centered timing
         if captions:
             mid = (seg_start + seg_end) / 2
             cap_window_start = max(seg_start, mid - max_cap_duration / 2)
             cap_window_end = min(seg_end, mid + max_cap_duration / 2)
+            # Apply minimum caption duration, clamped to segment boundary
+            cap_window_end = max(cap_window_end, min(cap_window_start + min_cap_duration, seg_end))
             window_len = cap_window_end - cap_window_start
 
             slice_len = window_len / len(captions)

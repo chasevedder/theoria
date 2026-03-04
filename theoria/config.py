@@ -45,6 +45,7 @@ class TheoriaConfig:
 
     # Captions
     max_cap_duration: float = 5.0
+    min_cap_duration: float = 1.0
     line_height: int = 55
 
     # ASS styles
