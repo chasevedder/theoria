@@ -140,14 +140,22 @@ def translate_with_gemini(
     )
 
     usage = response.usage_metadata
+    result = parse_response(response.text, chunk_id)
+    return result, usage
 
-    # Handle empty response
-    if not response.text or not response.text.strip():
+
+def parse_response(text: str | None, chunk_id: int = 0) -> list[dict] | None:
+    """Parse and validate a Gemini response, stripping markdown fences.
+
+    Returns:
+        List of validated segments, or None if the response is empty/invalid.
+    """
+    if not text or not text.strip():
         print(f"  [Chunk {chunk_id}] Gemini returned empty response.")
-        return None, usage
+        return None
 
     try:
-        raw_text = response.text.strip()
+        raw_text = text.strip()
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         elif raw_text.startswith("```"):
@@ -159,8 +167,8 @@ def translate_with_gemini(
         validated, skipped = validate_segments(parsed)
         if skipped > 0:
             print(f"  [Chunk {chunk_id}] Validated: {skipped} segment(s) skipped.")
-        return validated, usage
+        return validated
     except json.JSONDecodeError:
         print("Gemini failed to return valid JSON.")
-        print(f"Raw response: {response.text}")
-        return None, usage
+        print(f"Raw response: {text}")
+        return None

@@ -21,6 +21,9 @@ dependencies = [
 [project.scripts]
 theoria = "theoria.cli:main"
 
+[dependency-groups]
+dev = ["pytest", "pytest-cov"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -34,3 +37,13 @@ explicit = true
 torch = { index = "pytorch-cu124" }
 torchvision = { index = "pytorch-cu124" }
 torchaudio = { index = "pytorch-cu124" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["theoria"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
