@@ -20,29 +20,28 @@ The pipeline:
   - `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com/)
   - `HF_TOKEN` — [Hugging Face](https://huggingface.co/settings/tokens) (for Pyannote model access)
 
-## Installation
+## Setup
 
 ```bash
 git clone https://github.com/yourusername/theoria.git
 cd theoria
 uv sync
-source .venv/bin/activate
 ```
 
 ## Usage
 
 ```bash
 # Basic — Korean video to SRT
-theoria -v episode.mkv
+uv run theoria -v episode.mkv
 
 # Multiple output formats
-theoria -v episode.mkv --format srt ass
+uv run theoria -v episode.mkv --format srt ass
 
 # Sequential mode for better name consistency across the episode
-theoria -v episode.mkv --sequential
+uv run theoria -v episode.mkv --sequential
 
 # Limit to first 50 segments for a quick test
-theoria -v episode.mkv --limit-segments 50 --no-cleanup
+uv run theoria -v episode.mkv --limit-segments 50 --no-cleanup
 ```
 
 ### CLI Options
